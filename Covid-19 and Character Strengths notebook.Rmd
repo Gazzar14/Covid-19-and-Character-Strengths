@@ -1,0 +1,368 @@
+---
+title: "Covid-19 and Character Strengths"
+output:
+  html_document:
+    df_print: paged
+  word_document: default
+  pdf_document: default
+---
+
+# Description:
+
+The Covid-19 pandemic obliged people around the world to stay home and self-isolate, with a number of negative psychological consequences. This study focuses on the protective role of character strengths in sustaining mental health and self-efficacy during lockdown. Data were collected from 944 Italian respondents (mean age = 37.24 years, SD = 14.50) by means of an online survey investigating character strengths, psychological distress and Covid-19-related self-efficacy one month after lockdown began. Using principal component analysis, four strengths factors were extracted, namely transcendence, interpersonal, openness and restraint. Regression models with second-order factors showed that transcendence strengths had a strong inverse association with psychological distress, and a positive association with self-efficacy. Regression models with single strengths identified hope, zest, prudence, love and forgiveness as the strengths most associated with distress, love and zest as the most related to self-efficacy and zest to general mental health. Openness factor and appreciation of beauty showed an unexpected direct relation with psychological distress. These results provide original evidence of the association of character strengths, and transcendence strengths in particular, with mental health and self-efficacy in a pandemic and are discussed within the field of positive psychology.
+
+<https://link.springer.com/article/10.1007/s10902-020-00321-w#Sec10>
+
+## Variables:
+
+### Factors extracted through PCA
+
+1.  Openness
+2.  Restraint
+3.  Transcendence
+4.  Interpersonal
+
+### The three dependent measures
+
+1.  DASS21 (Depression Anxiety and Stress Scale)
+2.  GHQ12 (General Health Questionnaire)
+3.  SEC (Self-efficacy for Covid-19)
+
+### Six demographic variables added in the analysis:
+
+4.  Age
+5.  Gender
+6.  Work (representing the perceived work change subsequent to lockdown)
+7.  Student (being a student or not)
+8.  Day (how many days passed when the participant responded since the day the survey was opened)
+
+## Objectives:
+
+1.  Perform Principle component analysis
+2.  Perform cluster analysis using the four strengths factors extracted
+3.  Perform Multivariate regression for the three dependent measures
+
+## Imports
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+library(readxl)
+library(ggplot2)
+library(dplyr)
+library(summarytools)
+library(corrplot)
+library(psych)
+library(factoextra)
+library(MASS)
+library(caret)
+library(tidyverse)
+library(ROCR)
+library(MVN)
+library(car)
+library(biotools)
+library(MVTests)
+```
+
+```{r}
+DB <- read_excel("DB.xlsx")
+DB
+
+```
+
+## Check for missing values:
+
+```{r}
+sum(is.na(DB))
+```
+
+## About the dataset :
+
+After removing the factors (previously extracted) , the 6 demographic variables ,and the DASS measures (Used in computing the DASS_21 response variable), the total number of variables are 27, Which are then divided into 24 Explanatory and 3 response variables.Furthermore,There are no missing points .
+
+## Descriptive statistics
+
+```{r fig.height=10, fig.width=5}
+DB <- DB[-c(1) ] # Dropped ID column
+DB1 <- DB[ -c(1:4,8:13,38:40) ] ## dropped factors + demographic variables
+descr(DB1)
+```
+
+### Testing for the correlations between the variables
+
+Heatmap
+
+Barlett's test which is used ro determine if factor analysis is appropriate.
+
+```{r fig.height=15, fig.width=15}
+DB_corr <- cor(DB1)
+corrplot(DB_corr, method="circle")
+
+```
+
+From the correlogram above , it is observed that the there are high correlations between our dependent variables which lay the framework for why Multivariate regression was chosen as the analysis method . Moreover, there appears to be high correlations between the explanatory variables , which will violate the multicolinearity assumption later on the Modelling section . Principal component Analysis will not only solve the multicolinearity issue at hand but also help in data reduction.
+
+```{r}
+cortest.bartlett(DB1, n= nrow(DB1))
+```
+
+Since the P-value is smaller than 0.05 , it is safe to proceed with PCA and FA.
+
+# Data Reduction:
+
+Considering the multitude of explanatory variables , a data reduction technique is advised. Two common methods for data reduction are the Prinicpal component analysis and the factor analysis. Each has their underlying assumptions , with some significant overlap. However, PCA is often used when the objective is prediction rather than interpretation. Thus, factor analysis is recommended as interpreting the results is the main objective.
+
+## Principal component analysis:
+
+Principal component analysis (PCA) is a data reduction technique .It aims at transforming a set of interrelated variables to a smaller set of uncorrelated variables.PCs are a linear combination of the variables, such that: $$C=E^T.X$$
+
+```{r}
+PC_data <- DB1[ -c(1:3)] # dropping the Response (dependent) variables
+PC <- prcomp(PC_data, scale = TRUE) # Scaling is equivalent to using correlation matrix R
+summary(PC)
+```
+
+In almost all social sciences , a 50% or more explained variance is acceptable . Thus, taking the first 4 PCs will satisfy that requirement. Moreover , plotting a scree plot will aid in determining the numbers of PCs to be taken .
+
+### Scree plot
+
+```{r}
+Eigenvals = PC$sdev ^ 2
+
+qplot(c(1:24), Eigenvals) + 
+  geom_line() + 
+  xlab("Principal Components") + 
+  ggtitle("Scree Plot")
+```
+
+Judging by the scree plot above and the PCA summary it safe to conclude that taking 4 PCs is sufficient but not necessary. As mentioned in the beginning of the data reduction chapter , the number of observations are greater than the 20p rule of thumb .However, PCA will lay the framework when factors Analysis is applied .
+
+## Factor Analysis
+
+After extracting the 4 components , factor analysis is used in order to uncover patterns within the data. Although PCA and factor analysis are somewhat similar, it is important to point out that factor analysis presumes that the observed correlations among the variables reflect a specific underlying structure.Moreover , Factors obtained through factor analysis can be interpreted as real life unobserved variables.Taking into considerations the the theoretical background of the factors and the variables themselves , it can be assumed that the factors will be correlated . Thus, an oblique (promax) rotation would be appropriate.
+
+```{r}
+set.seed(120)
+covid_FA<- factanal(PC_data, factors = 4 ,rotation = "promax", scores = "Bartlett")
+covid_FA$loadings
+DB1 <- cbind(DB,covid_FA$scores)
+
+```
+
+Finally, the 4 factors extracted are as follows :
+
+![Figure 1: factors](images/paste-62C17EA2.png)
+
+**Openness** is how open-minded, imaginative, creative and insightful a person is or can be. As reflected by the *Creativity*, *Curiosity*,and *Bravery* variables.
+
+***Interpersonal*** skills are the skills required to effectively communicate, interact, and work with individuals and groups. Which is reflected by the *Fairness* , *Kindness* , and *Teamwork* variables.
+
+***Transcendence*** is an inherent human personality *trait* relating to the experience of spiritual aspects of the self. As such its reflected by the *Zest* , *Hope ,* and *Gratitude* variables.
+
+**Restraint** is reflected by the *Judgement* , *Prudence* , and *Perspective* variables
+
+Since , the factors extracted through our analysis match the Original factors (loadings wise) , the rest of the analysis will be conducted using the original Factors .
+
+```{r}
+ L2 <- covid_FA$loadings^2
+ com <- apply(L2,1, FUN = sum)
+ ComTable <- data.frame(com)
+ colnames(ComTable) <- c("Communalities")
+ ComTable
+```
+
+Each value in the table corresponds to how much all 4 factors explain the variations in the variables.
+
+## Cluster Analysis : K-means
+
+### Silhouette statistic
+
+```{r}
+FA_OG <- DB[,1:4]
+fviz_nbclust(FA_OG, FUNcluster=kmeans, k.max = 24)
+
+```
+
+As seen in the figure above, the optimal number of clusters is 2 . Moreover, this fits our prediction about the number of clusters within the data . The data itself is concerned with the self efficacy during covid and the mental state of the subjects , thus it would make sense to have two clusters : those who had a better mental state subsequently performing well in self efficacy and those who had a worse mental state thus falling into depression and anxiety and performing poorly in self efficacy .
+
+```{r warning=FALSE}
+set.seed(120)  # to allow for the reproducibility of the analysis
+DB_cluster <- kmeans(DB[,1:4], 2, nstart = 25) # clustering on the factors already present in the data set 
+DB_cluster
+#plot 
+fviz_cluster(DB_cluster, data = DB[,1:4], repel=TRUE)
+
+```
+
+As seen in the plot above , The data does indeed reflect 2 clusters . Confirming ,yet again , our hypothesis of the factor correlations.
+
+### Discriminant Analysis
+
+Linear discriminant analysis (LDA) must be applied in order to validate our clusters accuracy.\
+LDA aims at maximizing the distance between clusters in other words, minimizing the overlap between them .
+
+### Assumptions
+
+1.  Multivariate normality
+
+2.  Equality of covariances
+
+    $$\Sigma_1 = \Sigma_2$$
+
+3.  Unequal variable means $$\mu_1 = \mu_2$$
+
+##### Equality of co-variances
+
+```{r}
+factors <- DB[,1:4]
+Bo1 <- boxM(factors,DB_cluster$cluster)
+Bo1
+```
+
+Thus the assumption of homogeneity of covariance matrices is violated.
+
+##### Unequal Variable means 
+
+```{r}
+
+testm <- TwoSamplesHT2(factors, DB_cluster$cluster)
+testm$p.value
+```
+
+Unequal variable means assumption is satisfied
+
+#### Modeling and Testing
+
+```{r}
+DB1 <- cbind(factors ,DB_cluster$cluster)
+covid_DA <- qda(DB_cluster$cluster ~ Openness + Transcendence + Restraint + Interpersonal,data = DB1, CV = T)
+
+yhat <- covid_DA$class
+ytrue <- DB_cluster$cluster
+table(ytrue, yhat, dnn = c('Actual Group','Predicted Group'))
+
+
+CM <- table(list(predicted=covid_DA$class, observed=DB_cluster$cluster)) #confusion matrix
+caret::confusionMatrix(CM)
+```
+
+As observed above , The LDA model has a 96.2% accuracy . False positive rate at 2.28%
+
+## Multivariate Regression
+
+Response variables:
+
+1.  DASS_21 (Depression Anxiety and Stress Scale)
+
+2.  GHQ12 (General Health Questionnaire)
+
+3.  SEC (Self-efficacy for Covid-19)
+
+Explanatory variables:
+
+1.  Openness
+
+2.  Restraint
+
+3.  Transcendence
+
+4.  Interpersonal
+
+5.  Age
+
+6.  Gender
+
+7.  Work
+
+8.  Student
+
+9.  Day
+
+## Modelling
+
+### Encoding the nominal variables
+
+```{r}
+DB$Gender <- ifelse(DB$Gender  == "Male",1,0) # encoding non numeric variable #male = 1
+DB$Student <- ifelse(DB$Student  == "Student",1,0) #student = 1
+
+```
+
+### Testing for Normality
+
+```{r}
+Ntest <- mvn(data = DB[,5:7], mvnTest = "mardia")
+Ntest
+DASS_21<-as.matrix(DB[5])
+GHQ_12<-as.matrix(DB[6])
+SEC<- as.matrix(DB[7])
+```
+
+#### Histograms
+
+```{r}
+hist(DASS_21)
+```
+
+As seen the histogram above , DASS_21 is not normally distributed.
+
+```{r}
+hist(GHQ_12)
+```
+
+```{r}
+hist(SEC)
+```
+
+#### Transforming the DASS_21 variable
+
+```{r}
+DB[,5] <- DB[,5] + 1 # to avoid zero values, while maintaining the same distribution
+DB[,5] <- log(DB[,5])
+DASS_21 <- as.matrix(DB[,5])
+hist(DASS_21)
+
+```
+
+#### Fitting
+
+```{r}
+mlm1 <- lm(cbind(DASS_21, GHQ_12 , SEC ) ~ Openness + Restraint + Transcendence +Interpersonal + Age + Gender + Work + Student + Day, data = DB)
+summary(mlm1)
+```
+
+The output shows simply three uni-variate multiple regression model fitted to our dependent variables , it is not sufficient to determine which variable are significant from the output above.
+
+### Feature Selection
+
+#### MANOVA
+
+To determine which variables are jointly significant MANOVA has to be carried out
+
+```{r}
+Manova(mlm1)
+```
+
+Restraint , Interpersonal , Student , and Day variables are all jointly insignificant.Thus, we need to update our model without these variables. Testing to check whether dropping these variable have a significant impact on the model or not .
+
+```{r}
+mlm2 <- update(mlm1, . ~ .  - Interpersonal  - Day )
+anova(mlm1, mlm2)
+
+```
+
+Judging by the anova above where the significance of two the 2 models where compared , simple model seems to explain just as much variations in the dependent variables as the complex model .If the resulting p-value is sufficiently low (usually less than 0.05), we conclude that the more complex model is significantly better than the simpler model, and thus favor the more complex model. If the p-value is not sufficiently low (usually greater than 0.05), we should favor the simpler model.\* (source: Bookdown.org)
+
+```{r}
+summary(mlm2)
+```
+
+## Conclusion
+
+In conclusion , the following models explain the most variations in our response ,given the data at hand .
+
+1.  SEC \~ 1.513246 + Openness + Restraint +Transcendence + Age + Gender + Work + Student
+
+2.  GHQ_12 \~ 24.748856 + Openness + Restraint + Transcendence + Age + Gender + Work + Student
+
+3.  DASS_21 \~ 4.0519931+Openness + Restraint + Transcendence + Age + Gender + Work + Student
+
+These models explain 25% , 11.6% ,and 17% of the variations ,respectively .
